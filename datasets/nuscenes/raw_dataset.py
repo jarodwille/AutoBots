@@ -203,7 +203,7 @@ class NuScenesDataset(Dataset):
             sample_info[key] = convert_global_coords_to_local(val, annotation['translation'], annotation['rotation'])
         return sample_info
 
-    def choose_agents(self, past_samples, future_samples, sample_token):
+    def choose_agents(self, past_samples, future_samples, sample_token, return_instance_tokens=False):
         # Rectangle around ego at the prediction time
         x_left, x_right = -self.ego_range[0], self.ego_range[1]  # in meters
         y_behind, y_infront = -self.ego_range[2], self.ego_range[3]  # in meters
@@ -211,11 +211,15 @@ class NuScenesDataset(Dataset):
         # y_behind, y_infront = -10, 30  # in meters
 
         agent_types = {}
-        # we only want to consider at the prediction timetep, last point from the past(first in array).
+        # we only want to consider at the prediction timestep, last point from the past(first in array).
         valid_agent_ids = {}
-        for key, value in past_samples.items():
+        #past_samples is a dictionary of instances with value annotation throughout past samples
+        for key, value in past_samples.items(): 
+            # this gets info of an instance in desierd sample
             info = self._helper.get_sample_annotation(key, sample_token)
+
             agent_type = info['category_name']
+            #validates that agent is within desired range around ego, that it's human/vehicle, and that it has a future
             useful_agent_bool = "vehicle" in agent_type or "human" in agent_type
             if x_left <= value[0, 0] <= x_right and y_behind <= value[0, 1] <= y_infront and \
                     key in future_samples.keys() and useful_agent_bool:
@@ -232,7 +236,7 @@ class NuScenesDataset(Dataset):
 
         # construct numpy array for all agent points
         agents_types_list = []
-        agents_array = np.zeros((self._number_closest_agents, (self.past_secs+self.future_secs)*2, 3))
+        agents_array = np.zeros((self._number_closest_agents, (self.past_secs+self.future_secs)*2, 3)) #2 should prob say self.freq_hz
         for i, key in enumerate(final_valid_keys):
             # flipped past samples like before
             curr_agent = np.concatenate((past_samples[key][::-1], future_samples[key]), axis=0)
@@ -243,7 +247,10 @@ class NuScenesDataset(Dataset):
             agents_array[i, :len(curr_agent), 2] = 1
             agents_types_list.append(agent_types[key])
 
-        return agents_array, agents_types_list
+        if return_instance_tokens:
+            return agents_array, agents_types_list, final_valid_keys
+        else:
+            return agents_array, agents_types_list
 
     def __getitem__(self, idx: int):
         instance_token, sample_token = self._dataset[idx].split("_")
@@ -287,7 +294,7 @@ class NuScenesDataset(Dataset):
         )
         p_sample_info = self._rotate_sample_points(annotation, p_sample_info)
         f_sample_info = self._rotate_sample_points(annotation, f_sample_info)
-        agents_array, agent_types = self.choose_agents(p_sample_info, f_sample_info, sample_token)
+        agents_array, agent_types, agent_tokens_array= self.choose_agents(p_sample_info, f_sample_info, sample_token, return_instance_tokens=True)
         agent_types = ego_type + agent_types
 
         # Map stuff
@@ -306,7 +313,7 @@ class NuScenesDataset(Dataset):
                         rotated_map[road_idx, pt_idx, 2] = theta - raw_map[road_idx, pt_idx, 2]
                         rotated_map[road_idx, pt_idx, -1] = 1
 
-        extras = [instance_token, sample_token, annotation['translation'], annotation['rotation'], map_name]
+        extras = [instance_token, sample_token, annotation['translation'], annotation['rotation'], map_name, agent_tokens_array]
         return ego_array, agents_array.transpose((1, 0, 2)), road_img, extras, agent_types, rotated_map
 
     def __len__(self):

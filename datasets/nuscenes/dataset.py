@@ -17,7 +17,7 @@ class NuscenesH5Dataset(Dataset):
         self.use_map_img = use_map_img
         self.use_map_lanes = use_map_lanes
         self.pred_horizon = 12
-        self.num_others = 7
+        self.num_others = 20
         self.map_attr = 3
         self.predict_yaw = False
 
@@ -281,7 +281,10 @@ class NuscenesH5Dataset(Dataset):
 
         if self.use_joint_version:
             if self.rtn_extras:
-                extras = [dataset['translation'][idx], dataset['rotation'][idx], dataset['scene_ids'][idx][2].decode("utf-8")]
+                # translation, rotation, instance_token, sample_token, agents_tokens
+                extras = [dataset['translation'][idx], dataset['rotation'][idx], 
+                dataset['scene_ids'][idx][0].decode("utf-8"), dataset['scene_ids'][idx][1].decode("utf-8"), 
+                [s.decode("utf-8") for s in dataset['agents_tokens'][idx]]]
                 return in_ego, out_ego, in_agents, out_agents, roads, agent_types, extras, dataset['large_roads'][idx]
 
             return in_ego, out_ego, in_agents, out_agents, roads, agent_types
