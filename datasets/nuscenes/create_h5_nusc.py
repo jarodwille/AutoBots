@@ -4,7 +4,7 @@ import h5py
 import os
 import numpy as np
 
-from datasets.nuscenes.raw_dataset import NuScenesDataset
+from raw_dataset import NuScenesDataset
 
 
 '''
@@ -37,6 +37,7 @@ if __name__ == '__main__':
     f = h5py.File(os.path.join(args.output_h5_path, args.split_name + '_dataset.hdf5'), 'w')
     ego_trajectories = f.create_dataset("ego_trajectories", shape=(num_scenes, 18, 3), chunks=(1, 18, 3), dtype=np.float32)
     agent_trajectories = f.create_dataset("agents_trajectories", shape=(num_scenes, 18, max_num_agents, 3), chunks=(1, 18, max_num_agents, 3), dtype=np.float32)
+    agent_tokens = f.create_dataset("agents_tokens", shape=(num_scenes, max_num_agents), chunks=(1, max_num_agents), dtype='S50')
     scene_ids = f.create_dataset("scene_ids", shape=(num_scenes, 3), chunks=(1, 3), dtype='S50')
     scene_translation = f.create_dataset("translation", shape=(num_scenes, 3), chunks=(1, 3))
     scene_rotation = f.create_dataset("rotation", shape=(num_scenes, 4), chunks=(1, 4))
@@ -59,10 +60,14 @@ if __name__ == '__main__':
         scene_rotation[i] = data[3][3]
 
         curr_agent_types = data[4]
+        curr_agent_tokens = data[3][5] # instance tokens corresponding to agents in agent_types and in axis 1 of agent_trajectories
         while len(curr_agent_types) < max_num_agents + 1:
             curr_agent_types.append("None")
+            curr_agent_tokens.append("None")
         agent_types_ascii = [n.encode("ascii", "ignore") for n in curr_agent_types]
+        agent_tokens_ascii = [n.encode("ascii", "ignore") for n in curr_agent_tokens]
         agent_types[i] = agent_types_ascii
+        agent_tokens[i] = agent_tokens_ascii
 
         road_pts[i] = data[5]
 

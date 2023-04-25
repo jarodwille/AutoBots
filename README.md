@@ -7,6 +7,7 @@ We include support for the following datasets:
 - [TrajNet++](https://www.aicrowd.com/challenges/trajnet-a-trajectory-forecasting-challenge) Synthetic dataset (multi-agent)
 - [Interaction-Dataset](https://interaction-dataset.com/) (multi-agent)
 
+Visit our [webpage](https://fgolemo.github.io/autobots/) for more information.
 
 ### Getting Started
 
@@ -38,7 +39,7 @@ python train.py --exp-id test --seed 1 --dataset Nuscenes --model-type Autobot-E
 
 Training AutoBot-Joint on nuScenes while using the raw road segments in the map:
 ```
-python train.py --exp-id test --seed 1 --dataset Nuscenes --model-type Autobot-Joint --num-modes 10 --hidden-size 128 --num-encoder-layers 2 --num-decoder-layers 2 --dropout 0.1 --entropy-weight 40.0 --kl-weight 20.0 --use-FDEADE-aux-loss True --use-map-image True --tx-hidden-size 384 --batch-size 64 --learning-rate 0.00075 --learning-rate-sched 10 20 30 40 50 --dataset-path /path/to/root/of/nuscenes_h5_files
+python train.py --exp-id test --seed 1 --dataset Nuscenes --model-type Autobot-Joint --num-modes 10 --hidden-size 128 --num-encoder-layers 2 --num-decoder-layers 2 --dropout 0.1 --entropy-weight 40.0 --kl-weight 20.0 --use-FDEADE-aux-loss True --use-map-lanes True --tx-hidden-size 384 --batch-size 64 --learning-rate 0.00075 --learning-rate-sched 10 20 30 40 50 --dataset-path /path/to/root/of/nuscenes_h5_files
 ```
 
 #### Argoverse
@@ -64,7 +65,7 @@ python train.py --exp-id test --seed 1 --dataset interaction-dataset --model-typ
 
 For all experiments, you can evaluate the trained model on the validation dataset by running:
 ```
-python evaluate.py ----dataset-path /path/to/root/of/interaction_dataset_h5_files --models-path results/{Dataset}/{exp_name}/{model_epoch}.pth --batch-size 64
+python evaluate.py --dataset-path /path/to/root/of/interaction_dataset_h5_files --models-path results/{Dataset}/{exp_name}/{model_epoch}.pth --batch-size 64
 ```
 Note that the batch-size may need to be reduced for the Interaction-dataset since evaluation is performed on all agent scenes.
 
@@ -90,6 +91,21 @@ For the Interaction-Dataset:
 
 ```
 python useful_scripts/generate_indst_test.py --dataset-path /path/to/root/of/interaction_dataset_h5_files --models-path results/interaction-dataset/{exp_name}/{model_epoch}.pth 
+```
+
+## Reference
+
+If you use this repository, please cite our work:
+
+```
+@inproceedings{
+  girgis2022latent,
+  title={Latent Variable Sequential Set Transformers for Joint Multi-Agent Motion Prediction},
+  author={Roger Girgis and Florian Golemo and Felipe Codevilla and Martin Weiss and Jim Aldon D'Souza and Samira Ebrahimi Kahou and Felix Heide and Christopher Pal},
+  booktitle={International Conference on Learning Representations},
+  year={2022},
+  url={https://openreview.net/forum?id=Dup_dDqkZC5}
+}
 ```
 
 
