@@ -18,12 +18,19 @@ import matplotlib.pyplot as plt
 
 
 def prediction_ade_in_time(pred_t):
+    print("before subtraction: ", pred_t)
+    for i, row in enumerate(pred_t):
+        pred_t[i] = row - np.where(row != 0, gt_t[i], 0)
+    print("after: ", pred_t)
+    pred_t = np.squeeze(pred_t)
     pred_t_masked = np.ma.masked_equal(pred_t, 0)
-    return np.linalg.norm(pred_t_masked, axis=1)
+    error = np.linalg.norm(pred_t_masked, axis=(0))
+    error = np.linalg.norm(error, axis=(1))
+    return error
 
 # Load Data
 DATASETPATH = '../../../v1.0-trainval_full/'
-JSONPATH =  '../../results/Nuscenes/Autobot_joint_C10_H128_E2_D2_TXH384_NH16_EW40_KLW20_NormLoss_roadLanes_test_s1/autobot_preds.json'
+JSONPATH =  '../../results/Nuscenes/Autobot_joint_C5_H128_E2_D2_TXH384_NH16_EW40_KLW20_NormLoss_roadLanes_test_s1/autobot_preds.json'
 nusc = NuScenes('v1.0-trainval', dataroot=DATASETPATH)
 print("Dataset Loaded")
 
@@ -34,7 +41,7 @@ print("Predicted Trajectories loaded")
 # Set up true state plotting
 helper = PredictHelper(nusc)
 static_layer_rasterizer = StaticLayerRasterizer(helper)
-agent_rasterizer = AgentBoxesWithFadedFuture(helper, seconds_of_future=2)
+agent_rasterizer = AgentBoxesWithFadedFuture(helper, seconds_of_future=0)
 mtp_input_representation = InputRepresentation(static_layer_rasterizer, agent_rasterizer, Rasterizer())
 
 # can change this frame based on how interesting scene is
@@ -57,48 +64,66 @@ my_annotation_metadata =  nusc.get('sample_annotation', my_annotation_token)
 instance_token = my_annotation_metadata['instance_token']
 
 fig_list = []
-pred_t = np.zeros((40, 60, 2))
+pred_t = np.zeros((2, 10, 60, 2))
+gt_t = np.zeros((60, 2))
+prob_t = np.zeros((2, 10))
 
 # iterates over frames (samples)
 for i in range(39):
-    if (i%4 == 0):
+    if ((i+2)%4 == 0):
+        time_idx = (i-2)//4
         fig, ax = plt.subplots(figsize=(8, 6))
         # render true future of agents
         im = ax.imshow(mtp_input_representation.make_input_representation(instance_token, sample_token), label='Real Trajectory')
         sample_annotation = helper.get_sample_annotation(instance_token, sample_token)
-        x_ego, y_ego = sample_annotation['translation'][:2]      
+        x_ego, y_ego = sample_annotation['translation'][:2]
+        gt_t[i] = x_ego, y_ego
+        yaw = quaternion_yaw(Quaternion(sample_annotation['rotation']))      
         
         # render predicted trajectory of agents
         for pred in predicted_trajectories:
             if (pred['sample'] == sample_token and pred['instance'] == instance_token):
-                top_pred_idx = np.argmax(pred['probabilities'])
-                x_list = []
-                y_list = []
-                for j, pos in enumerate(pred['prediction'][top_pred_idx]):
-                    x_agent, y_agent = pos[0], pos[1]
-                    x_pixel = (x_agent - x_ego) * 10
-                    y_pixel = - (y_agent - y_ego) * 10
-                    row_pixel = int(250 + x_pixel)
-                    column_pixel = int(400 + y_pixel)
-                    pred_t[i, i+j] = x_pixel, y_pixel
-                    ax.scatter(row_pixel, column_pixel, color='black', label='Predictions', s=25, zorder=3)
-                    x_list.append(row_pixel), y_list.append(column_pixel)
-                    if (j > 5): break
-                ax.plot(x_list, y_list, color='limegreen', lw=3, zorder=2)
-                ax.set_title('Prediction vs Real Trajectory in Agent Frame', fontsize=16)
-                ax.tick_params(axis='both', which='both', length=0)
+                top_pred_indices = [np.argmax(pred['probabilities']), np.argpartition(pred['probabilities'], -2)[-2]]
+        
+                for k, pred_idx in enumerate(top_pred_indices):
+                    x_list = []
+                    y_list = []
+                    for j, pos in enumerate(pred['prediction'][pred_idx]):
+                        x_agent, y_agent = pos[0], pos[1]
+                        x_pixel = (x_agent - x_ego) * 10
+                        y_pixel = - (y_agent - y_ego) * 10
+                        row_pixel = int(250 + x_pixel)
+                        column_pixel = int(400 + y_pixel)
+                        pred_t[k, time_idx, time_idx+j] = x_pixel, y_pixel
+                        #prob_t[k, time_idx] = pred['probabilities'][pred_idx]
+                        x_list.append(row_pixel), y_list.append(column_pixel)
+                        
+                    ax.plot(x_list, y_list, color=(1, 1, 148/255), lw=5, alpha=0.8, zorder=2)
+                    ax.plot(x_list, y_list, color='black', lw=1.5, linestyle='--', dashes=(2.5, 0.5), zorder=3)
+                    
+                    x_arrow_start = x_list[-2]
+                    y_arrow_start = y_list[-2]
+                    x_end = x_list[-1]
+                    y_end = y_list[-1]
+                    
+                    # Add an arrow annotation at the end of the line
+                    arrow_props = dict(arrowstyle='->', color='black', mutation_scale=10)
+                    ax.annotate("", xy=(x_end, y_end), xytext=(x_arrow_start, y_arrow_start), arrowprops=arrow_props)
+                    
                 ax.grid(False)
                 ax.set_xticks([])
                 ax.set_yticks([])
-        ade_list = prediction_ade_in_time(pred_t)
-        # append combined image to full scene list          
+        
+        # append combined image to full scene list
         fig_list.append(fig)
         plt.close()
     sample_token = nusc.get('sample', sample_token)['next']
-    
+
+ade_list = prediction_ade_in_time(pred_t[0])
+print("average error for each time step!", ade_list)
 
 for i in range(len(fig_list)):
-        fig_list[i].savefig(f'plot_{i}.jpeg')
+        fig_list[i].savefig(f'plot_final_time={2*i + 1}.png')
     
 
 
